@@ -186,7 +186,117 @@ export default function Settings() {
           </div>
         </section>
       </div>
+
+      <RecoverySection coupleId={couple?.id} userId={user?.uid} />
     </main>
   )
 }
 
+function RecoverySection({
+  coupleId,
+  userId,
+}: {
+  coupleId?: string
+  userId?: string
+}) {
+  const [urlsText, setUrlsText] = useState('')
+  const [restoring, setRestoring] = useState(false)
+  const [progressMsg, setProgressMsg] = useState('')
+
+  const handleRestore = async () => {
+    if (!coupleId || !userId) {
+      toast.error('Vui lòng kiểm tra trạng thái đăng nhập và ghép đôi trước')
+      return
+    }
+
+    const rawUrls = urlsText
+      .split(/[\n,\s]+/)
+      .map((u) => u.trim())
+      .filter((u) => u.length > 0 && u.includes('cloudinary.com'))
+
+    if (rawUrls.length === 0) {
+      toast.error('Vui lòng dán ít nhất 1 đường dẫn ảnh/video Cloudinary hợp lệ')
+      return
+    }
+
+    try {
+      setRestoring(true)
+      setProgressMsg('Đang phân tích các URL...')
+
+      const { autoRestoreMemoriesFromCloudinary } = await import(
+        '../lib/recovery'
+      )
+
+      const result = await autoRestoreMemoriesFromCloudinary({
+        urls: rawUrls,
+        coupleId,
+        userId,
+        onProgress: (processed, total, restoredCount) => {
+          setProgressMsg(
+            `Đang xử lý ${processed}/${total} nhóm kỷ niệm (Đã tạo ${restoredCount} bài)...`,
+          )
+        },
+      })
+
+      toast.success(
+        `Đã khôi phục thành công ${result.restoredCount} bài viết kỷ niệm!`,
+      )
+      setUrlsText('')
+      setProgressMsg('')
+    } catch (e: unknown) {
+      console.error(e)
+      toast.error(
+        e instanceof Error ? e.message : 'Khôi phục thất bại, vui lòng thử lại',
+      )
+    } finally {
+      setRestoring(false)
+    }
+  }
+
+  return (
+    <section className="mt-8 rounded-[28px] border border-rose/15 bg-white/70 p-6 shadow-soft dark:border-white/10 dark:bg-white/5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-serif text-2xl">Khôi phục Bài viết Kỷ niệm</h2>
+          <p className="mt-1 text-sm text-muted dark:text-cream/70">
+            Tự động nhóm ảnh/video trên Cloudinary và tạo lại tất cả bài viết Kỷ niệm bị mất vào database Firestore.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <label className="block text-sm font-medium text-ink dark:text-cream/90">
+          Dán danh sách các đường dẫn (URL) ảnh/video từ Cloudinary (mỗi link 1 dòng hoặc cách nhau bởi dấu phẩy):
+        </label>
+        <textarea
+          rows={5}
+          value={urlsText}
+          onChange={(e) => setUrlsText(e.target.value)}
+          placeholder={`Ví dụ:\nhttps://res.cloudinary.com/dl8euunhe/image/upload/v1740000000/couples/CP-1/memories/MEM-1/photo1.jpg\nhttps://res.cloudinary.com/dl8euunhe/image/upload/v1740000000/couples/CP-1/memories/MEM-1/photo2.jpg`}
+          className="mt-2 w-full rounded-2xl border border-rose/20 bg-white/80 p-4 font-mono text-xs outline-none transition focus:border-rose dark:border-white/10 dark:bg-white/5 dark:text-cream"
+        />
+
+        {progressMsg ? (
+          <p className="mt-2 text-xs font-medium text-rose dark:text-rose-light">
+            ⏳ {progressMsg}
+          </p>
+        ) : null}
+
+        <div className="mt-4 flex items-center justify-between">
+          <p className="text-xs text-muted dark:text-cream/60">
+            💡 Mẹo: Bạn có thể lấy danh sách URL từ trang quản trị Cloudinary Media Library hoặc kiểm tra tab Network F12.
+          </p>
+
+          <button
+            type="button"
+            disabled={restoring || !urlsText.trim()}
+            onClick={handleRestore}
+            className="rounded-full bg-rose px-6 py-2.5 text-sm font-medium text-cream shadow-soft transition hover:brightness-95 disabled:opacity-50"
+          >
+            {restoring ? 'Đang khôi phục...' : '🚀 Khôi phục tự động'}
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
