@@ -90,7 +90,9 @@ async function run() {
       id: `media-${list.items.length + 1}-${Date.now()}`,
       type: isVideo ? 'video' : 'photo',
       url: cleanUrl,
-      thumbnailUrl: isVideo ? cleanUrl : '',
+      thumbnailUrl: isVideo
+        ? cleanUrl.replace(/\.(mp4|mov|webm|mkv|avi)(\?.*)?$/i, '.jpg')
+        : '',
       storagePath: publicId,
       caption: '',
       width: item.width || 0,

@@ -17,6 +17,7 @@ import { Link } from 'react-router-dom'
 import { db } from '../lib/firebase'
 import { useCouple } from '../hooks/useCouple'
 import { MOODS, type Memory, type MoodKey, type MediaItem } from '../types'
+import { getMediaThumbnailUrl } from '../lib/utils'
 
 type GalleryItem = {
   media: MediaItem
@@ -300,13 +301,9 @@ export default function Gallery() {
                 className="group relative mb-4 block overflow-hidden rounded-2xl border border-rose/15 bg-white/60 shadow-soft transition hover:brightness-[0.98] dark:border-white/10 dark:bg-white/5"
               >
                 <img
-                  src={
-                    it.media.type === 'video'
-                      ? it.media.thumbnailUrl || it.media.url
-                      : it.media.url
-                  }
+                  src={getMediaThumbnailUrl(it.media)}
                   alt={it.media.caption || it.memoryTitle}
-                  className="h-auto w-full"
+                  className="h-auto w-full object-cover"
                   loading="lazy"
                 />
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/65 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />

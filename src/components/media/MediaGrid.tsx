@@ -1,6 +1,7 @@
 import Masonry from 'react-masonry-css'
 import { Play } from 'lucide-react'
 import type { MediaItem } from '../../types'
+import { getMediaThumbnailUrl } from '../../lib/utils'
 
 const breakpoints = {
   default: 4,
@@ -34,9 +35,9 @@ export function MediaGrid({
           >
             <div className="relative">
               <img
-                src={m.type === 'video' ? m.thumbnailUrl || m.url : m.url}
+                src={getMediaThumbnailUrl(m)}
                 alt={m.caption || (m.type === 'video' ? 'video' : 'photo')}
-                className="h-auto w-full"
+                className="h-auto w-full object-cover"
                 loading="lazy"
               />
               {m.type === 'video' ? (
@@ -58,4 +59,3 @@ export function MediaGrid({
     </Masonry>
   )
 }
-

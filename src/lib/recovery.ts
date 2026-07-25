@@ -267,7 +267,10 @@ export async function autoRestoreMemoriesFromCloudinary(params: {
       id: `media-${idx + 1}-${Date.now()}`,
       type: m.resourceType,
       url: m.cleanUrl,
-      thumbnailUrl: m.resourceType === 'video' ? m.cleanUrl : '',
+      thumbnailUrl:
+        m.resourceType === 'video'
+          ? m.cleanUrl.replace(/\.(mp4|mov|webm|mkv|avi)(\?.*)?$/i, '.jpg')
+          : '',
       storagePath: m.publicId,
       caption: '',
       width: 0,

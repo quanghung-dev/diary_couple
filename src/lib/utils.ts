@@ -41,6 +41,31 @@ export function isImageFile(file: File) {
   return file.type.startsWith('image/')
 }
 
+/**
+ * Trả về đường dẫn thumbnail dạng ảnh (JPG/PNG) chuẩn cho cả photo và video.
+ * Nếu là Cloudinary video URL, tự động chuyển đổi extension .mp4 -> .jpg để Cloudinary sinh thumbnail ảnh.
+ */
+export function getMediaThumbnailUrl(media?: {
+  type?: 'photo' | 'video' | string
+  url?: string
+  thumbnailUrl?: string
+}): string {
+  if (!media) return ''
+  if (media.type === 'photo') return media.url || ''
+
+  const thumb = media.thumbnailUrl || ''
+  if (thumb && thumb.match(/\.(jpg|jpeg|png|webp|avif)(\?.*)?$/i)) {
+    return thumb
+  }
+
+  const url = media.url || ''
+  if (url.includes('cloudinary.com')) {
+    return url.replace(/\.(mp4|mov|webm|mkv|avi)(\?.*)?$/i, '.jpg')
+  }
+
+  return thumb || url
+}
+
 export async function generateVideoThumbnail(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video')
@@ -132,4 +157,3 @@ export function dataUrlToBlob(dataUrl: string) {
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
-

@@ -13,7 +13,7 @@ import { LocationSearchField, type LocationFieldValue } from '../components/loca
 import { SongEmbed } from '../components/memory/SongEmbed'
 import { SongFields } from '../components/memory/SongFields'
 import { parseSongUrl } from '../lib/song'
-import { formatViFullDate } from '../lib/utils'
+import { formatViFullDate, getMediaThumbnailUrl } from '../lib/utils'
 import { MOODS, type MediaItem, type MoodKey } from '../types'
 
 export default function MemoryDetail() {
@@ -42,7 +42,7 @@ export default function MemoryDetail() {
           return {
             src: m.url,
             type: 'video' as const,
-            poster: m.thumbnailUrl || m.url,
+            poster: getMediaThumbnailUrl(m),
             description: m.caption || '',
             sources: [{ src: m.url, type: 'video/mp4' }],
           }
@@ -518,7 +518,7 @@ export default function MemoryDetail() {
                     className="group relative overflow-hidden rounded-2xl border border-rose/15 bg-white/60 dark:border-white/10 dark:bg-white/5"
                   >
                     <img
-                      src={m.type === 'video' ? m.thumbnailUrl || m.url : m.url}
+                      src={getMediaThumbnailUrl(m)}
                       alt={m.caption || (m.type === 'video' ? 'video' : 'photo')}
                       className="aspect-[16/10] w-full object-cover"
                       loading="lazy"

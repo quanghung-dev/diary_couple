@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import type { Memory } from '../../types'
 import { MOODS } from '../../types'
 import { parseSongUrl } from '../../lib/song'
-import { formatViFullDate } from '../../lib/utils'
+import { formatViFullDate, getMediaThumbnailUrl } from '../../lib/utils'
 
 function mediaCountText(memory: Memory) {
   const photos = memory.mediaItems.filter((m) => m.type === 'photo').length
@@ -58,7 +58,7 @@ export function MemoryCard({
             ) : (
               <>
                 <img
-                  src={cover.thumbnailUrl || cover.url}
+                  src={getMediaThumbnailUrl(cover)}
                   alt={memory.title}
                   className="h-full w-full object-cover"
                   style={{ objectPosition: coverPosition }}
