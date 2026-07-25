@@ -32,6 +32,18 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig)
 const db = getFirestore(app)
 
+function deriveTitle(filename, index) {
+  if (!filename) return `Kỷ niệm yêu thương ${index + 1}`
+  let name = filename.replace(/\.[^/.]+$/, '')
+  name = name.replace(/^[a-f0-9-]{30,}_?/i, '')
+  name = name.replace(/^[0-9a-zA-Z]{15,}[-_]/, '')
+  const cleaned = name.replace(/[-_]+/g, ' ').trim()
+  if (cleaned.length > 2 && !/^\d+$/.test(cleaned)) {
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
+  }
+  return `Kỷ niệm yêu thương ${index + 1}`
+}
+
 async function run() {
   console.log(`🔍 Đang quét toàn bộ ảnh trên Cloudinary (${cloudName})...`)
   const authHeader = 'Basic ' + Buffer.from(`${apiKey.trim()}:${apiSecret.trim()}`).toString('base64')
@@ -65,15 +77,15 @@ async function run() {
     const publicId = item.public_id || ''
     const isVideo = item.resource_type === 'video'
 
-    // Tách memoryId từ public_id: couples/{coupleId}/memories/{memoryId}/...
     const parts = publicId.split('/')
     let memId = 'restored-memory'
     let cId = coupleId
+    let filename = parts[parts.length - 1]
 
     if (parts[0] === 'couples' && parts[1]) cId = parts[1]
     if (parts[2] === 'memories' && parts[3]) memId = parts[3]
 
-    const list = memoryGroups.get(memId) || { coupleId: cId, items: [] }
+    const list = memoryGroups.get(memId) || { coupleId: cId, items: [], filename }
     list.items.push({
       id: `media-${list.items.length + 1}-${Date.now()}`,
       type: isVideo ? 'video' : 'photo',
@@ -91,10 +103,11 @@ async function run() {
   let count = 0
   for (const [memId, group] of memoryGroups.entries()) {
     const now = Timestamp.now()
+    const title = deriveTitle(group.filename, count)
     const memoryData = {
       memoryId: memId,
       coupleId: group.coupleId,
-      title: `Kỷ niệm khôi phục ${count + 1}`,
+      title,
       date: now,
       location: '',
       description: 'Kỷ niệm được tự động khôi phục từ Cloudinary.',
@@ -109,7 +122,7 @@ async function run() {
 
     await setDoc(doc(db, 'memories', memId), memoryData, { merge: true })
     count++
-    console.log(`✅ [${count}/${memoryGroups.size}] Đã khôi phục bài viết: ${memId} (${group.items.length} media)`)
+    console.log(`✅ [${count}/${memoryGroups.size}] Đã khôi phục: "${title}" (${memId}) - ${group.items.length} media`)
   }
 
   console.log(`🚀 HOÀN THÀNH: Đã khôi phục thành công ${count} bài viết kỷ niệm vào Firestore!`)

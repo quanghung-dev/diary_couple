@@ -22,6 +22,30 @@ type CloudinarySearchResponse = {
 }
 
 /**
+ * Trích xuất tiêu đề gợi ý thông minh từ tên file gốc của ảnh/video
+ */
+export function deriveTitleFromMedia(mediaItems: ParsedCloudinaryMedia[], index: number): string {
+  for (const m of mediaItems) {
+    if (!m.filename) continue
+    // Tách bỏ phần mở rộng file (.jpg, .png, .mp4...)
+    let name = m.filename.replace(/\.[^/.]+$/, '')
+    // Bóc tách UUID / ID prefix được sinh ngẫu nhiên lúc upload (ví dụ: "c8e1a7b2-3f4d-..." hoặc "174000000-...")
+    name = name.replace(/^[a-f0-9-]{30,}_?/i, '')
+    name = name.replace(/^[0-9a-zA-Z]{15,}[-_]/, '')
+
+    // Chuyển dấu gạch dưới / gạch ngang thành khoảng trắng
+    const cleaned = name.replace(/[-_]+/g, ' ').trim()
+
+    // Nếu tiêu đề hợp lệ (dài hơn 2 ký tự và không chỉ toàn số)
+    if (cleaned.length > 2 && !/^\d+$/.test(cleaned)) {
+      return cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
+    }
+  }
+
+  return `Kỷ niệm yêu thương ${index + 1}`
+}
+
+/**
  * Gọi API Cloudinary Search tự động quét và lấy danh sách URL tất cả ảnh/video.
  * Dùng CORS Proxy để tránh rào cản CORS khi gọi Cloudinary Admin API trực tiếp từ trình duyệt.
  */
@@ -144,10 +168,12 @@ export function parseCloudinaryUrl(url: string): ParsedCloudinaryMedia | null {
     const parts = cleanUrl.split('/upload/')
     const publicIdWithExt = parts.length > 1 ? parts[1].replace(/^v\d+\//, '') : cleanUrl
     const publicId = publicIdWithExt.substring(0, publicIdWithExt.lastIndexOf('.')) || publicIdWithExt
+    const filename = publicIdWithExt.substring(publicIdWithExt.lastIndexOf('/') + 1)
     return {
       rawUrl: trimmed,
       cleanUrl,
       publicId,
+      filename,
       resourceType,
     }
   }
@@ -249,13 +275,16 @@ export async function autoRestoreMemoriesFromCloudinary(params: {
       order: idx,
     }))
 
+    // Trích xuất tiêu đề gợi ý từ tên file ảnh gốc
+    const suggestedTitle = deriveTitleFromMedia(mediaItemsList, restoredMemoryIds.length)
+
     const memoryData: Memory = {
       memoryId: memId,
       coupleId,
-      title: `Kỷ niệm khôi phục ${restoredMemoryIds.length + 1}`,
+      title: suggestedTitle,
       date: now,
       location: '',
-      description: 'Kỷ niệm được tự động khôi phục từ Cloudinary.',
+      description: 'Kỷ niệm được tự động khôi phục từ Cloudinary. Bạn có thể nhấn chỉnh sửa để cập nhật mô tả và tiêu đề theo ý muốn.',
       mood: 'happy',
       mediaItems,
       coverMediaId: mediaItems[0]?.id ?? null,
