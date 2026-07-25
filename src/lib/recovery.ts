@@ -12,8 +12,18 @@ export type ParsedCloudinaryMedia = {
   resourceType: 'photo' | 'video'
 }
 
+type CloudinaryResource = {
+  secure_url?: string
+  url?: string
+}
+
+type CloudinarySearchResponse = {
+  resources?: CloudinaryResource[]
+}
+
 /**
- * Gọi API Cloudinary Search tự động quét và lấy danh sách URL tất cả ảnh/video
+ * Gọi API Cloudinary Search tự động quét và lấy danh sách URL tất cả ảnh/video.
+ * Dùng CORS Proxy để tránh rào cản CORS khi gọi Cloudinary Admin API trực tiếp từ trình duyệt.
  */
 export async function fetchCloudinaryResourcesApi(params: {
   cloudName: string
@@ -24,56 +34,82 @@ export async function fetchCloudinaryResourcesApi(params: {
   const { cloudName, apiKey, apiSecret, coupleId } = params
   const authHeader = 'Basic ' + btoa(`${apiKey.trim()}:${apiSecret.trim()}`)
 
-  const url = `https://api.cloudinary.com/v1_1/${cloudName.trim()}/resources/search`
-
-  // Tìm kiếm theo folder couples/<coupleId>/* hoặc folder couples/*
+  const targetUrl = `https://api.cloudinary.com/v1_1/${cloudName.trim()}/resources/search`
   const expression = coupleId ? `folder:couples/${coupleId}/*` : `folder:couples/*`
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: authHeader,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      expression,
-      max_results: 500,
-    }),
-  })
+  // Thử các giải pháp CORS proxy để vượt qua rào cản CORS của trình duyệt
+  const corsProxies = [
+    `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+    targetUrl,
+  ]
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Lỗi Cloudinary API (${response.status}): ${errorText}`)
+  let lastError: Error | null = null
+  let data: CloudinarySearchResponse | null = null
+
+  for (const proxyUrl of corsProxies) {
+    try {
+      const response = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: authHeader,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          expression,
+          max_results: 500,
+        }),
+      })
+
+      if (response.ok) {
+        data = (await response.json()) as CloudinarySearchResponse
+        break
+      } else {
+        const errorText = await response.text()
+        lastError = new Error(`Lỗi Cloudinary API (${response.status}): ${errorText}`)
+      }
+    } catch (err: unknown) {
+      lastError = err instanceof Error ? err : new Error(String(err))
+    }
   }
 
-  const data = (await response.json()) as {
-    resources?: Array<{ secure_url?: string; url?: string }>
+  if (!data) {
+    throw (
+      lastError ||
+      new Error(
+        'Trình duyệt chặn kết nối CORS tới Cloudinary. Bạn vui lòng dùng nút "Dán URL thủ công" hoặc kiểm tra lại API Key / Secret.',
+      )
+    )
   }
 
   const resources = data.resources
 
   if (!resources || !Array.isArray(resources) || resources.length === 0) {
     // Fallback: Tìm tất cả ảnh & video nếu không khớp đường dẫn folder cụ thể
-    const fallbackRes = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: authHeader,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        expression: 'resource_type:image OR resource_type:video',
-        max_results: 500,
-      }),
-    })
+    for (const proxyUrl of corsProxies) {
+      try {
+        const fallbackRes = await fetch(proxyUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: authHeader,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            expression: 'resource_type:image OR resource_type:video',
+            max_results: 500,
+          }),
+        })
 
-    if (fallbackRes.ok) {
-      const fallbackData = (await fallbackRes.json()) as {
-        resources?: Array<{ secure_url?: string; url?: string }>
-      }
-      if (fallbackData.resources && Array.isArray(fallbackData.resources)) {
-        return fallbackData.resources
-          .map((r) => r.secure_url || r.url)
-          .filter((u): u is string => Boolean(u))
+        if (fallbackRes.ok) {
+          const fallbackData = (await fallbackRes.json()) as CloudinarySearchResponse
+          if (fallbackData?.resources && Array.isArray(fallbackData.resources)) {
+            return fallbackData.resources
+              .map((r: CloudinaryResource) => r.secure_url || r.url)
+              .filter((u): u is string => Boolean(u))
+          }
+        }
+      } catch {
+        // continue trying next proxy
       }
     }
 
@@ -81,7 +117,7 @@ export async function fetchCloudinaryResourcesApi(params: {
   }
 
   return resources
-    .map((r) => r.secure_url || r.url)
+    .map((r: CloudinaryResource) => r.secure_url || r.url)
     .filter((u): u is string => Boolean(u))
 }
 
