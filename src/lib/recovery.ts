@@ -13,6 +13,79 @@ export type ParsedCloudinaryMedia = {
 }
 
 /**
+ * Gọi API Cloudinary Search tự động quét và lấy danh sách URL tất cả ảnh/video
+ */
+export async function fetchCloudinaryResourcesApi(params: {
+  cloudName: string
+  apiKey: string
+  apiSecret: string
+  coupleId?: string
+}): Promise<string[]> {
+  const { cloudName, apiKey, apiSecret, coupleId } = params
+  const authHeader = 'Basic ' + btoa(`${apiKey.trim()}:${apiSecret.trim()}`)
+
+  const url = `https://api.cloudinary.com/v1_1/${cloudName.trim()}/resources/search`
+
+  // Tìm kiếm theo folder couples/<coupleId>/* hoặc folder couples/*
+  const expression = coupleId ? `folder:couples/${coupleId}/*` : `folder:couples/*`
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: authHeader,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      expression,
+      max_results: 500,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Lỗi Cloudinary API (${response.status}): ${errorText}`)
+  }
+
+  const data = (await response.json()) as {
+    resources?: Array<{ secure_url?: string; url?: string }>
+  }
+
+  const resources = data.resources
+
+  if (!resources || !Array.isArray(resources) || resources.length === 0) {
+    // Fallback: Tìm tất cả ảnh & video nếu không khớp đường dẫn folder cụ thể
+    const fallbackRes = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: authHeader,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        expression: 'resource_type:image OR resource_type:video',
+        max_results: 500,
+      }),
+    })
+
+    if (fallbackRes.ok) {
+      const fallbackData = (await fallbackRes.json()) as {
+        resources?: Array<{ secure_url?: string; url?: string }>
+      }
+      if (fallbackData.resources && Array.isArray(fallbackData.resources)) {
+        return fallbackData.resources
+          .map((r) => r.secure_url || r.url)
+          .filter((u): u is string => Boolean(u))
+      }
+    }
+
+    return []
+  }
+
+  return resources
+    .map((r) => r.secure_url || r.url)
+    .filter((u): u is string => Boolean(u))
+}
+
+/**
  * Trích xuất thông tin coupleId, memoryId, publicId từ URL ảnh/video Cloudinary.
  * Ví dụ URL:
  * https://res.cloudinary.com/dl8euunhe/image/upload/v1740000000/couples/CP-123/memories/MEM-456/abc-xyz.jpg
