@@ -50,56 +50,47 @@ export function useCouple(): UseCoupleResult {
 
     setLoading(true)
 
-    let user1Found = false
-    let user2Found = false
+    const matches: Partial<Record<'user1' | 'user2', (Couple & { id: string })[]>> = {}
 
     const q1 = query(
       couplesCol(),
       where('user1', '==', user.uid),
-      limit(1),
     )
 
     const q2 = query(
       couplesCol(),
       where('user2', '==', user.uid),
-      limit(1),
     )
 
-    const maybeSetEmpty = () => {
-      if (!user1Found && !user2Found) {
-        setCouple(null)
-        setLoading(false)
-      }
+    const selectCouple = () => {
+      if (!matches.user1 || !matches.user2) return
+      const owned = matches.user1
+      const joined = matches.user2
+      setCouple(owned.find((item) => item.user2) ?? joined[0] ?? owned[0] ?? null)
+      setLoading(false)
+    }
+
+    const onError = (error: unknown) => {
+      console.error('Không thể tìm hồ sơ cặp đôi', error)
+      toast.error('Không thể tải hồ sơ cặp đôi')
     }
 
     const unsub1 = onSnapshot(
       q1,
       (snap) => {
-        user1Found = !snap.empty
-        if (!snap.empty) {
-          const d = snap.docs[0]!
-          setCouple({ ...(d.data() as Couple), id: d.id })
-          setLoading(false)
-        } else {
-          maybeSetEmpty()
-        }
+        matches.user1 = snap.docs.map((d) => ({ ...(d.data() as Couple), id: d.id }))
+        selectCouple()
       },
-      () => setLoading(false),
+      onError,
     )
 
     const unsub2 = onSnapshot(
       q2,
       (snap) => {
-        user2Found = !snap.empty
-        if (!snap.empty) {
-          const d = snap.docs[0]!
-          setCouple({ ...(d.data() as Couple), id: d.id })
-          setLoading(false)
-        } else {
-          maybeSetEmpty()
-        }
+        matches.user2 = snap.docs.map((d) => ({ ...(d.data() as Couple), id: d.id }))
+        selectCouple()
       },
-      () => setLoading(false),
+      onError,
     )
 
     return () => {

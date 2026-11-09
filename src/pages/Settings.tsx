@@ -212,7 +212,10 @@ function RecoverySection({ coupleId }: { coupleId?: string }) {
       setStatus(messages.join(' '))
     } catch (error) {
       console.error(error)
-      setStatus('Khôi phục chưa hoàn tất. Bạn có thể bấm lại để tiếp tục.')
+      const denied = error instanceof Error && 'code' in error && error.code === 'permission-denied'
+      setStatus(denied
+        ? 'Firestore từ chối truy cập dữ liệu khôi phục. Quản trị viên cần kiểm tra quyền truy cập và Firestore Rules.'
+        : 'Khôi phục chưa hoàn tất. Bạn có thể bấm lại để tiếp tục.')
     } finally {
       setRestoring(false)
     }

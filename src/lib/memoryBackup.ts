@@ -41,14 +41,21 @@ export function recoverMemory(id: string, coupleId: string, mediaFallback?: Docu
   const { memory, backup } = memoryRefs(id)
   return runTransaction(db, async (transaction) => {
     const current = await transaction.get(memory)
+    const saved = await transaction.get(backup)
     if (current.exists()) {
       const data = current.data()
       if (data.coupleId !== coupleId) return 'skipped'
-      transaction.set(backup, data)
+      const original = saved.data()
+      const isPlaceholder = data.title === 'Kỷ niệm đã khôi phục' && data.description === ''
+      if (isPlaceholder && original?.coupleId === coupleId &&
+          (original.description || original.title !== data.title)) {
+        transaction.set(memory, original)
+        return 'full'
+      }
+      if (!saved.exists()) transaction.set(backup, data)
       return 'existing'
     }
 
-    const saved = await transaction.get(backup)
     const data = saved.data() ?? mediaFallback
     if (!data || data.coupleId !== coupleId) return 'skipped'
 
