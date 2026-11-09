@@ -23,13 +23,35 @@ service cloud.firestore {
     }
 
     match /memories/{memoryId} {
-      allow read: if isSignedIn() && isCoupleMember(resource.data.coupleId);
+      allow get: if isSignedIn() && (resource == null || isCoupleMember(resource.data.coupleId));
+      allow list: if isSignedIn() && isCoupleMember(resource.data.coupleId);
 
       allow create: if isSignedIn()
-        && request.resource.data.createdBy == request.auth.uid
-        && isCoupleMember(request.resource.data.coupleId);
+        && isCoupleMember(request.resource.data.coupleId)
+        && (request.resource.data.createdBy == request.auth.uid
+          || get(/databases/$(database)/documents/memoryBackups/$(memoryId)).data == request.resource.data);
 
-      allow update, delete: if isSignedIn() && isCoupleMember(resource.data.coupleId);
+      allow update: if isSignedIn()
+        && isCoupleMember(resource.data.coupleId)
+        && request.resource.data.coupleId == resource.data.coupleId;
+      allow delete: if isSignedIn() && isCoupleMember(resource.data.coupleId);
+    }
+
+    match /memoryBackups/{memoryId} {
+      function matchesMemory() {
+        let memory = /databases/$(database)/documents/memories/$(memoryId);
+        return existsAfter(memory)
+          ? getAfter(memory).data == request.resource.data
+          : get(memory).data == request.resource.data;
+      }
+
+      allow get: if isSignedIn() && (resource == null || isCoupleMember(resource.data.coupleId));
+      allow list: if isSignedIn() && isCoupleMember(resource.data.coupleId);
+
+      allow create, update: if isSignedIn()
+        && (resource == null || resource.data.coupleId == request.resource.data.coupleId)
+        && isCoupleMember(request.resource.data.coupleId)
+        && matchesMemory();
     }
   }
 }

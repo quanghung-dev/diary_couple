@@ -1,6 +1,5 @@
 import {
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -8,9 +7,7 @@ import {
   onSnapshot,
   orderBy,
   query,
-  setDoc,
   startAfter,
-  updateDoc,
   where,
   type DocumentData,
   type QueryDocumentSnapshot,
@@ -20,6 +17,7 @@ import toast from 'react-hot-toast'
 import { db } from '../lib/firebase'
 import type { Memory } from '../types'
 import { serverNow } from '../lib/firestore'
+import { deleteMemoryWithBackup, saveNewMemory, updateMemoryWithBackup } from '../lib/memoryBackup'
 
 export async function createMemory(params: {
   memoryId: string
@@ -29,15 +27,7 @@ export async function createMemory(params: {
   }
 }) {
   const { memoryId, data } = params
-  console.log('[Memory] before Firestore write', { memoryId, data })
-  const ref = doc(db, 'memories', memoryId)
-  try {
-    await setDoc(ref, data as any)
-    console.log('[Memory] Firestore write success', { memoryId })
-  } catch (e) {
-    console.error('[Memory] Firestore write error', e)
-    throw e
-  }
+  await saveNewMemory(memoryId, data)
 }
 
 export function useMemories(params: { coupleId: string; pageSize?: number }) {
@@ -47,7 +37,6 @@ export function useMemories(params: { coupleId: string; pageSize?: number }) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const lastDocRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null)
-  const [indexMissing, setIndexMissing] = useState(false)
 
   useEffect(() => {
     if (!coupleId) {
@@ -55,20 +44,18 @@ export function useMemories(params: { coupleId: string; pageSize?: number }) {
       setLoading(false)
       setHasMore(false)
       lastDocRef.current = null
-      setIndexMissing(false)
       return
     }
     setLoading(true)
     lastDocRef.current = null
     setHasMore(true)
-    setIndexMissing(false)
 
     let unsubFallback: null | (() => void) = null
 
     const q = query(
       collection(db, 'memories'),
       where('coupleId', '==', coupleId),
-      orderBy('date', 'desc'),
+      orderBy('createdAt', 'desc'),
       limit(pageSize),
     )
 
@@ -78,7 +65,10 @@ export function useMemories(params: { coupleId: string; pageSize?: number }) {
         const docs = snap.docs
         lastDocRef.current = docs.length ? docs[docs.length - 1]! : null
         setHasMore(docs.length === pageSize)
-        setMemories(docs.map((d) => ({ ...(d.data() as Memory), id: d.id })))
+        setMemories(docs.map((d) => ({
+          ...(d.data({ serverTimestamps: 'estimate' }) as Memory),
+          id: d.id,
+        })))
         setLoading(false)
       },
       (err) => {
@@ -89,9 +79,6 @@ export function useMemories(params: { coupleId: string; pageSize?: number }) {
           code === 'failed-precondition' ||
           msg.toLowerCase().includes('requires an index')
         ) {
-          setIndexMissing(true)
-          toast.error('Firestore cần tạo index (memories: coupleId + date).')
-
           // Stop the failing indexed listener to avoid repeated console spam.
           try {
             unsubPrimary()
@@ -99,11 +86,10 @@ export function useMemories(params: { coupleId: string; pageSize?: number }) {
             // ignore
           }
 
-          // Fallback: no orderBy (works without composite index), then sort client-side.
+          // Read the full set before sorting when the composite index is unavailable.
           const q2 = query(
             collection(db, 'memories'),
             where('coupleId', '==', coupleId),
-            limit(pageSize),
           )
           unsubFallback = onSnapshot(
             q2,
@@ -112,10 +98,13 @@ export function useMemories(params: { coupleId: string; pageSize?: number }) {
               lastDocRef.current = null
               setHasMore(false)
               const sorted = docs2
-                .map((d) => ({ ...(d.data() as Memory), id: d.id }))
+                .map((d) => ({
+                  ...(d.data({ serverTimestamps: 'estimate' }) as Memory),
+                  id: d.id,
+                }))
                 .sort(
                   (a, b) =>
-                    (b.date?.toMillis?.() ?? 0) - (a.date?.toMillis?.() ?? 0),
+                    (b.createdAt ?? b.date).toMillis() - (a.createdAt ?? a.date).toMillis(),
                 )
               setMemories(sorted)
               setLoading(false)
@@ -148,7 +137,7 @@ export function useMemories(params: { coupleId: string; pageSize?: number }) {
       const q = query(
         collection(db, 'memories'),
         where('coupleId', '==', coupleId),
-        orderBy('date', 'desc'),
+        orderBy('createdAt', 'desc'),
         startAfter(lastDocRef.current),
         limit(pageSize),
       )
@@ -170,7 +159,7 @@ export function useMemories(params: { coupleId: string; pageSize?: number }) {
 
   const deleteMemory = useCallback(async (id: string) => {
     try {
-      await deleteDoc(doc(db, 'memories', id))
+      await deleteMemoryWithBackup(id)
       toast.success('Đã xoá kỷ niệm')
     } catch (e) {
       console.error(e)
@@ -181,10 +170,10 @@ export function useMemories(params: { coupleId: string; pageSize?: number }) {
   const updateMemory = useCallback(
     async (id: string, patch: Partial<Memory>) => {
       try {
-        await updateDoc(doc(db, 'memories', id), {
+        await updateMemoryWithBackup(id, {
           ...patch,
           updatedAt: serverNow(),
-        } as any)
+        })
         toast.success('Đã cập nhật')
       } catch (e) {
         console.error(e)
@@ -200,7 +189,6 @@ export function useMemories(params: { coupleId: string; pageSize?: number }) {
       loading,
       loadingMore,
       hasMore,
-      indexMissing,
       loadMore,
       deleteMemory,
       updateMemory,
@@ -210,7 +198,6 @@ export function useMemories(params: { coupleId: string; pageSize?: number }) {
       loading,
       loadingMore,
       hasMore,
-      indexMissing,
       loadMore,
       deleteMemory,
       updateMemory,

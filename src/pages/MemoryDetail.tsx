@@ -1,4 +1,4 @@
-import { Timestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore'
+import { Timestamp } from 'firebase/firestore'
 import { Pencil, Plus, Star, Trash2, X } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
@@ -8,7 +8,7 @@ import { MediaGrid } from '../components/media/MediaGrid'
 import { UploadZone } from '../components/media/UploadZone'
 import { useMemory } from '../hooks/useMemories'
 import { useUpload } from '../hooks/useUpload'
-import { db } from '../lib/firebase'
+import { deleteMemoryWithBackup, updateMemoryWithBackup } from '../lib/memoryBackup'
 import { LocationSearchField, type LocationFieldValue } from '../components/location/LocationSearchField'
 import { SongEmbed } from '../components/memory/SongEmbed'
 import { SongFields } from '../components/memory/SongFields'
@@ -142,7 +142,7 @@ export default function MemoryDetail() {
 
       const parsedSong = parseSongUrl(songUrl)
       setBusy(true)
-      await updateDoc(doc(db, 'memories', memory.id), {
+      await updateMemoryWithBackup(memory.id, {
         title: title.trim(),
         date: Timestamp.fromDate(new Date(date)),
         location: loc.location.trim(),
@@ -173,11 +173,11 @@ export default function MemoryDetail() {
 
   const onDelete = async () => {
     if (!memory) return
-    const ok = window.confirm('Xoá kỷ niệm này? Thao tác không thể hoàn tác.')
+    const ok = window.confirm('Xoá kỷ niệm này khỏi nhật ký? Bạn có thể khôi phục trong Cài đặt.')
     if (!ok) return
     try {
       setBusy(true)
-      await deleteDoc(doc(db, 'memories', memory.id))
+      await deleteMemoryWithBackup(memory.id)
       toast.success('Đã xoá')
       navigate('/journal')
     } catch {

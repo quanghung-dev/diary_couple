@@ -26,8 +26,9 @@ export default function Journal() {
 
   const grouped = memories.reduce(
     (acc, m) => {
-      const y = formatViYear(m.date)
-      const my = formatViMonthYear(m.date)
+      const postedAt = m.createdAt ?? m.date
+      const y = formatViYear(postedAt)
+      const my = formatViMonthYear(postedAt)
       acc[y] ??= {}
       acc[y]![my] ??= []
       acc[y]![my]!.push(m)
@@ -44,7 +45,7 @@ export default function Journal() {
         <div>
           <h1 className="font-serif text-4xl tracking-tight">Nhật ký</h1>
           <p className="mt-2 text-muted dark:text-cream/70">
-            Dòng thời gian kỷ niệm của hai bạn, mới nhất ở trên.
+            Bài đăng của hai bạn, mới nhất ở trên.
           </p>
         </div>
         <Link
@@ -60,14 +61,6 @@ export default function Journal() {
           {Array.from({ length: 6 }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
-        </div>
-      ) : mem.indexMissing ? (
-        <div className="mt-8 rounded-[28px] border border-rose/15 bg-white/70 p-6 shadow-soft dark:border-white/10 dark:bg-white/5">
-          <h2 className="font-serif text-2xl">Thiếu Firestore index</h2>
-          <p className="mt-2 text-muted dark:text-cream/70">
-            Firestore đang yêu cầu composite index cho query nhật ký (coupleId + date).
-            Bạn vẫn xem được tạm thời (không phân trang), nhưng nên tạo index trong Firebase Console để ổn định.
-          </p>
         </div>
       ) : memories.length === 0 ? (
         <div className="mt-14 grid place-items-center">
@@ -110,9 +103,7 @@ export default function Journal() {
       ) : (
         <div className="mt-10 space-y-10">
           {years.map((year) => {
-            const months = Object.keys(grouped[year] ?? {}).sort((a, b) =>
-              a.localeCompare(b, 'vi'),
-            )
+            const months = Object.keys(grouped[year] ?? {})
             return (
               <section key={year}>
                 <div className="sticky top-[72px] z-10 -mx-2 mb-6 rounded-full bg-cream/90 px-4 py-2 font-serif text-2xl text-ink backdrop-blur dark:bg-[#140C0C]/70 dark:text-cream">
