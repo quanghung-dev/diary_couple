@@ -12,20 +12,37 @@ export default async function handler(req, res) {
   }
 
   const {
+    VITE_FIREBASE_API_KEY: firebaseKey,
     VITE_FIREBASE_PROJECT_ID: projectId,
     VITE_CLOUDINARY_CLOUD_NAME: cloudName,
     CLOUDINARY_API_KEY: apiKey,
     CLOUDINARY_API_SECRET: apiSecret,
   } = process.env
-  if (!projectId || !cloudName || !apiKey || !apiSecret) return res.status(503).end()
+  if (!firebaseKey || !projectId || !cloudName || !apiKey || !apiSecret) return res.status(503).end()
 
   try {
-    // Firestore evaluates its couple membership rule using the caller's Firebase ID token.
+    const lookup = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(firebaseKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: authorization.slice('Bearer '.length) }),
+      },
+    )
+    if (!lookup.ok) return res.status(403).end()
+    const { users } = await lookup.json()
+    const uid = users?.[0]?.localId
+    if (!uid) return res.status(403).end()
+
     const membership = await fetch(
       `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/couples/${coupleId}`,
       { headers: { Authorization: authorization } },
     )
     if (!membership.ok) return res.status(403).end()
+    const { fields } = await membership.json()
+    if (fields?.user1?.stringValue !== uid && fields?.user2?.stringValue !== uid) {
+      return res.status(403).end()
+    }
 
     const prefix = `couples/${coupleId}/memories/`
     const search = new URL(`https://api.cloudinary.com/v1_1/${cloudName}/resources/search`)
