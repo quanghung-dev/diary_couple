@@ -5,6 +5,7 @@ import type { Memory } from '../../types'
 import { MOODS } from '../../types'
 import { parseSongUrl } from '../../lib/song'
 import { formatViFullDate, getMediaThumbnailUrl } from '../../lib/utils'
+import { MemoryPostedAt } from './MemoryPostedAt'
 
 function mediaCountText(memory: Memory) {
   const photos = memory.mediaItems.filter((m) => m.type === 'photo').length
@@ -40,7 +41,7 @@ export function MemoryCard({
       onContextMenu={(e) => {
         e.preventDefault()
         if (!onDelete) return
-        const ok = window.confirm('Xoá kỷ niệm này?')
+        const ok = window.confirm('Chuyển kỷ niệm này vào Thùng rác?')
         if (ok) onDelete(memory.id)
       }}
     >
@@ -93,6 +94,7 @@ export function MemoryCard({
           <p className="text-xs uppercase tracking-[0.16em] text-muted dark:text-cream/60">
             {formatViFullDate(memory.date)}
           </p>
+          <MemoryPostedAt timestamp={memory.createdAt} />
           <h3 className="mt-2 font-serif text-2xl tracking-tight text-ink dark:text-cream">
             {memory.title}
           </h3>

@@ -11,6 +11,8 @@ import { useUpload } from '../hooks/useUpload'
 import { deleteMemoryWithBackup, updateMemoryWithBackup } from '../lib/memoryBackup'
 import { LocationSearchField, type LocationFieldValue } from '../components/location/LocationSearchField'
 import { SongEmbed } from '../components/memory/SongEmbed'
+import { MemoryHistory } from '../components/memory/MemoryHistory'
+import { MemoryPostedAt } from '../components/memory/MemoryPostedAt'
 import { SongFields } from '../components/memory/SongFields'
 import { parseSongUrl } from '../lib/song'
 import { formatViFullDate, getMediaThumbnailUrl } from '../lib/utils'
@@ -173,7 +175,7 @@ export default function MemoryDetail() {
 
   const onDelete = async () => {
     if (!memory) return
-    const ok = window.confirm('Xoá kỷ niệm này khỏi nhật ký? Bạn có thể khôi phục trong Cài đặt.')
+    const ok = window.confirm('Chuyển kỷ niệm này vào Thùng rác? Bạn có thể khôi phục trong Cài đặt.')
     if (!ok) return
     try {
       setBusy(true)
@@ -244,6 +246,7 @@ export default function MemoryDetail() {
               <p className="text-xs uppercase tracking-[0.16em] text-muted dark:text-cream/60">
                 {formatViFullDate(memory.date)}
               </p>
+              <MemoryPostedAt timestamp={memory.createdAt} />
               {edit ? (
                 <input
                   value={title}
@@ -595,6 +598,8 @@ export default function MemoryDetail() {
           />
         )}
       </div>
+
+      {!edit && <MemoryHistory key={memory.id} id={memory.id} revision={memory.revision} />}
 
       <LightboxViewer
         open={lightboxOpen}

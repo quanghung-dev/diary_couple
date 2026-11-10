@@ -58,6 +58,18 @@ export type Memory = {
   createdBy: string
   createdAt: Timestamp
   updatedAt: Timestamp
+  revision?: number
+  revisionId?: string
+  deletedAt?: Timestamp | null
+  deletedBy?: string | null
+}
+
+export type MemoryVersion = {
+  revision: number
+  action: 'create' | 'edit' | 'delete' | 'undelete' | 'recover' | 'baseline' | 'restoreVersion'
+  actorUid: string
+  recordedAt: Timestamp
+  snapshot: Memory
 }
 
 export type BucketCategory =

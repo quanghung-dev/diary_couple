@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Copy, HeartHandshake } from 'lucide-react'
+import { MemoryTrash } from '../components/memory/MemoryTrash'
 import { useAuth } from '../hooks/useAuth'
 import { useCouple } from '../hooks/useCouple'
 import { formatViFullDate } from '../lib/utils'
@@ -188,6 +189,7 @@ export default function Settings() {
       </div>
 
       <RecoverySection coupleId={loading ? undefined : couple?.id} />
+      {!loading && couple && <MemoryTrash key={couple.id} coupleId={couple.id} />}
     </main>
   )
 }

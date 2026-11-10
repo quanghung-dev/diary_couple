@@ -23,26 +23,55 @@ service cloud.firestore {
     }
 
     match /memories/{memoryId} {
+      function backup() {
+        return /databases/$(database)/documents/memoryBackups/$(memoryId);
+      }
+
+      function matchesActiveBackup() {
+        let saved = getAfter(backup()).data;
+        return saved.deletedAt == null && saved == request.resource.data;
+      }
+
       allow get: if isSignedIn() && (resource == null || isCoupleMember(resource.data.coupleId));
       allow list: if isSignedIn() && isCoupleMember(resource.data.coupleId);
 
       allow create: if isSignedIn()
         && isCoupleMember(request.resource.data.coupleId)
+        && matchesActiveBackup()
         && (request.resource.data.createdBy == request.auth.uid
-          || get(/databases/$(database)/documents/memoryBackups/$(memoryId)).data == request.resource.data);
+          || get(backup()).data.createdBy == request.resource.data.createdBy);
 
       allow update: if isSignedIn()
         && isCoupleMember(resource.data.coupleId)
-        && request.resource.data.coupleId == resource.data.coupleId;
-      allow delete: if isSignedIn() && isCoupleMember(resource.data.coupleId);
+        && request.resource.data.coupleId == resource.data.coupleId
+        && matchesActiveBackup();
+      allow delete: if isSignedIn()
+        && isCoupleMember(resource.data.coupleId)
+        && getAfter(backup()).data.coupleId == resource.data.coupleId
+        && getAfter(backup()).data.deletedAt == request.time
+        && getAfter(backup()).data.deletedBy == request.auth.uid;
     }
 
     match /memoryBackups/{memoryId} {
-      function matchesMemory() {
+      function matchesMemory(data) {
         let memory = /databases/$(database)/documents/memories/$(memoryId);
-        return existsAfter(memory)
-          ? getAfter(memory).data == request.resource.data
-          : get(memory).data == request.resource.data;
+        return data.deletedAt == null
+          ? getAfter(memory).data == data
+          : data.deletedAt == request.time && data.deletedBy == request.auth.uid
+            && exists(memory) && !existsAfter(memory)
+            && data.diff(get(memory).data).affectedKeys()
+              .hasOnly(['revision', 'revisionId', 'deletedAt', 'deletedBy']);
+      }
+
+      function recordsVersion(data) {
+        let versionId = data.revisionId;
+        let version = getAfter(/databases/$(database)/documents/memoryBackups/$(memoryId)/versions/$(versionId)).data;
+        let previous = resource == null ? 0 : resource.data.get('revision', 0);
+        return data.revision is int
+          && (data.revision == previous + 1 || (previous == 0 && data.revision == 2))
+          && version.revision == data.revision
+          && version.recordedAt == request.time
+          && version.snapshot == data;
       }
 
       allow get: if isSignedIn() && (resource == null || isCoupleMember(resource.data.coupleId));
@@ -51,7 +80,32 @@ service cloud.firestore {
       allow create, update: if isSignedIn()
         && (resource == null || resource.data.coupleId == request.resource.data.coupleId)
         && isCoupleMember(request.resource.data.coupleId)
-        && matchesMemory();
+        && matchesMemory(request.resource.data)
+        && recordsVersion(request.resource.data);
+
+      match /versions/{versionId} {
+        function parent() {
+          return /databases/$(database)/documents/memoryBackups/$(memoryId);
+        }
+
+        function matchesVersion(data) {
+          let saved = getAfter(parent()).data;
+          let active = /databases/$(database)/documents/memories/$(memoryId);
+          return (saved.revisionId == versionId && saved.revision == data.revision
+              && saved == data.snapshot)
+            || (data.action == 'baseline' && data.revision == 1 && saved.revision == 2
+              && (!exists(parent()) || get(parent()).data.get('revision', 0) == 0)
+              && (data.snapshot == get(active).data || data.snapshot == get(parent()).data));
+        }
+
+        allow read: if isSignedIn() && isCoupleMember(get(parent()).data.coupleId);
+        allow create: if isSignedIn()
+          && isCoupleMember(getAfter(parent()).data.coupleId)
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.recordedAt == request.time
+          && request.resource.data.snapshot.coupleId == getAfter(parent()).data.coupleId
+          && matchesVersion(request.resource.data);
+      }
     }
   }
 }
